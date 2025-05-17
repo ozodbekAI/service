@@ -1,8 +1,8 @@
-name: Deploy Django to Server
+name: Deploy Django to Server (alternative approach)
 
 on:
   push:
-    branches: [ main ]  # Asosiy branchga push qilinganda ishga tushadi
+    branches: [ main ]
 
 jobs:
   deploy:
@@ -21,13 +21,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
         
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+          
       - name: Deploy to server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
             cd service/
             git pull origin main
             source venv/bin/activate
@@ -36,3 +39,4 @@ jobs:
             python manage.py collectstatic --no-input
             sudo systemctl restart gunicorn
             sudo systemctl restart nginx
+          EOF
