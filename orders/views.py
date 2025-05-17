@@ -35,7 +35,9 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_authenticated:
-            if user.role in ['admin', 'manager'] or user.is_staff or user.is_superuser:
+            if user.role == 'admin':
+                return Order.objects.all()
+            elif user.role in ['admin', 'manager'] or user.is_staff or user.is_superuser:
                 return Order.objects.filter(manager=user)
             return Order.objects.filter(client=user)
         return Order.objects.none()

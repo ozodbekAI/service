@@ -25,12 +25,14 @@ class AnnouncementSerializer(serializers.ModelSerializer):
     accepted_by_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), source='accepted_by', write_only=True, allow_null=True, required=False
     )
+    images = AnnouncementImageSerializer(many=True, read_only=True)  # Add images field
 
     class Meta:
         model = Announcement
         fields = [
             'id', 'title', 'description', 'status', 'created_at', 'updated_at',
-            'client', 'client_id', 'accepted_by', 'accepted_by_id', 'rejection_reason'
+            'client', 'client_id', 'accepted_by', 'accepted_by_id', 'rejection_reason',
+            'estimated_completion_time', 'estimated_price', 'images'  # Include images
         ]
 
 class NotificationSerializer(serializers.ModelSerializer):

@@ -8,7 +8,7 @@ from django.utils import timezone
 from datetime import timedelta, datetime
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 from django.forms import ValidationError
-from .models import Announcement, AnnouncementImage, Notification, Dashboard
+from .models import Announcement, AnnouncementImage, Notification, Dashboard, AnnouncementProduct
 from .serializers import AnnouncementSerializer, AnnouncementImageSerializer, NotificationSerializer, DashboardSerializer
 from .permissions import IsClientOrReadOnly, IsManagerOrAdmin, IsAdminUser, IsOwnerOrManagerOrAdmin
 from orders.models import Order, OrderProduct
@@ -29,10 +29,12 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         print(f"User: {user.username}, Role: {user.role}, Action: {self.action}")
         if user.is_authenticated:
             if user.role in ['admin', 'manager']:
-                if self.action in ['pending', 'retrieve']:
+                if self.action == 'pending':
                     return Announcement.objects.filter(status='pending')
                 elif self.action == 'managed':
                     return Announcement.objects.filter(accepted_by=user)
+                elif user.role == 'admin' and self.action == 'retrieve':
+                    return Announcement.objects.all()  # Admins can retrieve any announcement
                 else:
                     return Announcement.objects.all()
             else:
