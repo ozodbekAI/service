@@ -1,4 +1,4 @@
-name: Deploy Django to Server with Password
+name: Deploy Django to /root/service
 
 on:
   push:
@@ -10,32 +10,43 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        
+
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
-        
+
       - name: Deploy to server
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
           SERVER_PASS: ${{ secrets.SERVER_PASSWORD }}
         run: |
-          # Parol orqali SSH ulanish
           sshpass -p "$SERVER_PASS" ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST << 'EOF'
-            cd service/
-            git pull origin main
-            
-            # Python virtual muhitni faollashtirish
+            # Loyihani to'g'ridan-to'g'ri /root/service ga klon qilish yoki pull qilish
+            if [ -d /root/service/.git ]; then
+              cd /root/service
+              git pull origin main
+            else
+              git clone https://github.com/ozodbekAI/service.git /root/service
+              cd /root/service
+            fi
+
+            # Virtual muhitni yaratish (agar yo'q bo'lsa)
+            if [ ! -d venv ]; then
+              python3 -m venv venv
+            fi
+
+            # Virtual muhitni faollashtirish
             source venv/bin/activate
-            
-            # Kerakli paketlarni o'rnatish
+
+            # Kerakli kutubxonalarni o‘rnatish
+            pip install --upgrade pip
             pip install -r requirements.txt
-            
-            # Django migratsiyalarni bajarish va statik fayllarni yig'ish
+
+            # Django buyruqlarini bajarish
             python manage.py migrate
             python manage.py collectstatic --no-input
-            
-            # Xizmatlarni qayta ishga tushirish
-            sudo systemctl restart gunicorn
-            sudo systemctl restart nginx
+
+            # Xizmatlarni qayta ishga tushirish (agar systemd sozlangan bo‘lsa)
+            sudo systemctl restart gunicorn || echo "Gunicorn xizmati mavjud emas"
+            sudo systemctl restart nginx || echo "Nginx xizmati mavjud emas"
           EOF
