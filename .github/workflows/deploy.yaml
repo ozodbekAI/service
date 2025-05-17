@@ -1,4 +1,4 @@
-name: Deploy Django to Server (alternative approach)
+name: Deploy Django to Server
 
 on:
   push:
@@ -11,40 +11,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-        
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-          chmod 700 ~/.ssh
-          ls -la ~/.ssh/
           
-      - name: Debug SSH key
+      - name: Deploy to server
         run: |
-          ssh-keygen -l -f ~/.ssh/id_rsa || echo "Invalid key format"
-          
-      - name: Deploy to server with sshpass
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y sshpass
-          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
             cd service/
             git pull origin main
+            
+            # Python virtual muhitni faollashtirish
             source venv/bin/activate
+            
+            # Kerakli paketlarni o'rnatish
             pip install -r requirements.txt
+            
+            # Django migratsiyalarni bajarish va statik fayllarni yig'ish
             python manage.py migrate
             python manage.py collectstatic --no-input
+            
+            # Xizmatlarni qayta ishga tushirish
             sudo systemctl restart gunicorn
             sudo systemctl restart nginx
           EOF
