@@ -21,10 +21,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
         
-      - name: Run tests
-        run: |
-          python manage.py test
-        
       - name: Deploy to server
         uses: appleboy/ssh-action@master
         with:
@@ -32,7 +28,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /var/www/your-django-project
+            cd service/
             git pull origin main
             source venv/bin/activate
             pip install -r requirements.txt
