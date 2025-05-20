@@ -26,7 +26,18 @@ jobs:
             # Clone or pull the project to /root/service
             if [ -d /root/service/.git ]; then
               cd /root/service
+              # Configure git user for stashing
+              git config --global user.email "deploy@example.com"
+              git config --global user.name "Deployment Script"
+              
+              # Stash any local changes including untracked files
+              git stash save --include-untracked "Deployment stash $(date)"
+              
+              # Pull the latest changes
               git pull origin main
+              
+              # Apply stashed changes back (if there were any)
+              git stash list | grep -q "stash" && git stash pop || echo "No stashed changes to apply"
             else
               git clone https://github.com/ozodbekAI/service.git /root/service
               cd /root/service
