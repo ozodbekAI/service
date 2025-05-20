@@ -1,19 +1,17 @@
 name: Deploy Django to /root/service
-
 on:
   push:
     branches: [ main ]
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
+      
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
-
+      
       - name: Deploy to server
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
@@ -21,7 +19,11 @@ jobs:
           SERVER_PASS: ${{ secrets.SERVER_PASSWORD }}
         run: |
           sshpass -p "$SERVER_PASS" ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST << 'EOF'
-            # Loyihani to'g'ridan-to'g'ri /root/service ga klon qilish yoki pull qilish
+            # Install PostgreSQL development packages for psycopg2
+            sudo apt-get update
+            sudo apt-get install -y python3-dev libpq-dev postgresql postgresql-contrib
+
+            # Clone or pull the project to /root/service
             if [ -d /root/service/.git ]; then
               cd /root/service
               git pull origin main
@@ -29,24 +31,38 @@ jobs:
               git clone https://github.com/ozodbekAI/service.git /root/service
               cd /root/service
             fi
-
-            # Virtual muhitni yaratish (agar yo'q bo'lsa)
+            
+            # Create virtual environment if it doesn't exist
             if [ ! -d venv ]; then
               python3 -m venv venv
             fi
-
-            # Virtual muhitni faollashtirish
+            
+            # Activate virtual environment
             source venv/bin/activate
-
-            # Kerakli kutubxonalarni o‘rnatish
+            
+            # Install required packages with psycopg2-binary instead of psycopg2
             pip install --upgrade pip
+            sed -i 's/psycopg2==2.9.10/psycopg2-binary==2.9.10/g' requirements.txt
             pip install -r requirements.txt
+            
+            # Create static directory if it doesn't exist
+            mkdir -p static
 
-            # Django buyruqlarini bajarish
+            # Check if STATIC_ROOT is set in settings.py
+            if ! grep -q "STATIC_ROOT" config/settings.py; then
+              echo "# Setting STATIC_ROOT for collectstatic" >> config/settings.py
+              echo "import os" >> config/settings.py
+              echo "STATIC_ROOT = os.path.join(BASE_DIR, 'static')" >> config/settings.py
+            fi
+            
+            # Run Django commands
             python manage.py migrate
             python manage.py collectstatic --no-input
-
-            # Xizmatlarni qayta ishga tushirish (agar systemd sozlangan bo‘lsa)
-            sudo systemctl restart gunicorn || echo "Gunicorn xizmati mavjud emas"
-            sudo systemctl restart nginx || echo "Nginx xizmati mavjud emas"
+            
+            # Set proper permissions
+            sudo chown -R www-data:www-data /root/service/static
+            
+            # Restart services if systemd is configured
+            sudo systemctl restart gunicorn || echo "Gunicorn service not found"
+            sudo systemctl restart nginx || echo "Nginx service not found"
           EOF
