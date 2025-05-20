@@ -14,12 +14,12 @@ class UserSerializer(serializers.ModelSerializer):
         }
     
     def get_role(self, obj):
-        if obj.is_superuser:
+        if obj.role == 'admin':
             return 'admin'
-        elif obj.is_staff:
+        elif obj.role == 'manager':
             return 'staff'
-        else:
-            return 'user'
+        elif obj.role == 'client':
+            return 'client'
     
     def create(self, validated_data):
         password = validated_data.pop('password')

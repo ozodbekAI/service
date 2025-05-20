@@ -1,7 +1,7 @@
 from rest_framework import viewsets, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
@@ -14,6 +14,10 @@ from .permissions import IsClientOrReadOnly, IsManagerOrAdmin, IsAdminUser, IsOw
 from orders.models import Order, OrderProduct
 from products.models import Product
 from django.contrib.auth.models import User
+from django.db.models.functions import TruncMonth
+
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 class AnnouncementViewSet(viewsets.ModelViewSet):
     queryset = Announcement.objects.all()
@@ -381,6 +385,78 @@ class DashboardViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = DashboardSerializer
     permission_classes = [IsAdminUser]
 
+    @extend_schema(
+        tags=["Dashboard"],
+        responses={200: OpenApiResponse(description="Order status distribution")}
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsManagerOrAdmin])
+    def order_status_distribution(self, request):
+        orders = Order.objects.values('status').annotate(count=Count('id'))
+        status_mapping = {
+            'client_approved': 'Pending',
+            'in_process': 'In Progress',
+            'completed': 'Completed',
+            'rejected': 'Rejected'
+        }
+        result = [
+            {
+                'name': status_mapping.get(item['status'], item['status']),
+                'value': item['count']
+            }
+            for item in orders
+        ]
+        return Response(result)
+
+    @extend_schema(
+        tags=["Dashboard"],
+        responses={200: OpenApiResponse(description="Top selling products")}
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsManagerOrAdmin])
+    def top_selling_products(self, request):
+        top_products = OrderProduct.objects.values('product__name').annotate(
+            total_sales=Count('id')
+        ).order_by('-total_sales')[:5]
+        result = [
+            {
+                'name': item['product__name'],
+                'sales': item['total_sales']
+            }
+            for item in top_products
+        ]
+        return Response(result)
+
+    @extend_schema(
+        tags=["Dashboard"],
+        responses={200: OpenApiResponse(description="User growth over time")}
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsManagerOrAdmin])
+    def user_growth(self, request):
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=365)  # Last 12 months
+        users = User.objects.filter(
+            date_joined__date__range=[start_date, end_date]
+        ).annotate(
+            month=TruncMonth('date_joined')
+        ).values('month').annotate(
+            count=Count('id')
+        ).order_by('month')
+        
+        result = []
+        current_date = start_date
+        months = []
+        while current_date <= end_date:
+            months.append(current_date.strftime('%b'))
+            current_date += timedelta(days=30)
+
+        user_counts = {item['month'].strftime('%b'): item['count'] for item in users}
+        for month in months:
+            result.append({
+                'month': month,
+                'users': user_counts.get(month, 0)
+            })
+
+        return Response(result)
+
     @extend_schema(tags=["Dashboard"], responses={200: DashboardSerializer})
     @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
     def today_stats(self, request):
@@ -393,15 +469,23 @@ class DashboardViewSet(viewsets.ReadOnlyModelViewSet):
         dashboard.total_orders = Order.objects.count()
         dashboard.completed_orders = Order.objects.filter(status='completed').count()
         dashboard.pending_orders = Order.objects.filter(status__in=['client_approved', 'in_process']).count()
+        
+        # Fix: Use the get_user_model() function to get the correct User model
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         dashboard.total_clients = User.objects.filter(is_staff=False, is_superuser=False).count()
+        
         dashboard.save()
-
-        serializer = self.get_serializer(dashboard)
+        
+        # Return the dashboard data as needed
+        serializer = DashboardSerializer(dashboard)
         return Response(serializer.data)
 
     @extend_schema(tags=["Dashboard"], responses={200: DashboardSerializer(many=True)})
     @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
     def weekly_stats(self, request):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         end_date = timezone.now().date()
         start_date = end_date - timedelta(days=6)
 
@@ -430,9 +514,9 @@ class DashboardViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
     def user_management(self, request):
         total_users = User.objects.count()
-        clients = User.objects.filter(is_staff=False, is_superuser=False).count()
-        managers = User.objects.filter(is_staff=True, is_superuser=False).count()
-        admins = User.objects.filter(is_superuser=True).count()
+        clients = User.objects.filter(role="client").count()
+        managers = User.objects.filter(role="manager").count()
+        admins = User.objects.filter(role="admin").count()
 
         return Response({
             'total_users': total_users,

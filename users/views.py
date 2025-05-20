@@ -134,3 +134,16 @@ class UserViewSet(viewsets.ModelViewSet):
             data['role'] = 'user'
             
         return Response(data)
+
+    @extend_schema(
+        responses={200: UserSerializer(many=True)},
+        tags=["Users"],
+        description="Get all users (admin only)"
+    )
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def all_users(self, request):
+        if not request.user.role == 'admin':
+            return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
+        users = User.objects.all()
+        serializer = self.get_serializer(users, many=True)
+        return Response(serializer.data)
