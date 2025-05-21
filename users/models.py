@@ -5,9 +5,10 @@ from django.contrib.auth.models import AbstractUser
 
 
 class User(AbstractUser):   
-    fullname = models.CharField(max_length=100, blank=True, null=True)
+    username = models.CharField(max_length=100, blank=True, null=True)
     phone = models.CharField(max_length=13, blank=True, null=True)
     email = models.EmailField(unique=True)
+    company_name = models.CharField(max_length=255, blank=True, null=True)
     is_legal = models.BooleanField(default=False)
     password = models.CharField(max_length=100)
     role = models.CharField(max_length=10, default='client')
@@ -32,4 +33,4 @@ class User(AbstractUser):
     REQUIRED_FIELDS = ['fullname', 'password']
 
     def __str__(self):
-        return self.username
+        return self.fullname

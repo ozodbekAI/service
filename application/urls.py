@@ -1,9 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from application.views import AnnouncementImageViewSet, AnnouncementViewSet, NotificationViewSet, DashboardViewSet
+from application.views import AnnouncementImageViewSet, AnnouncementViewSet, NotificationViewSet, DashboardViewSet, UnauthenticatedAnnouncementImageViewSet
 
 router = DefaultRouter()
 router.register(r'announcements-image', AnnouncementImageViewSet)
+router.register(r'unauthenticated-announcements-image', UnauthenticatedAnnouncementImageViewSet, basename='unauthenticated-announcement-image')
 router.register(r'notifications', NotificationViewSet)
 router.register(r'announcements', AnnouncementViewSet)
 router.register(r'dashboard', DashboardViewSet)

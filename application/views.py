@@ -360,6 +360,27 @@ class AnnouncementImageViewSet(viewsets.ModelViewSet):
         except Announcement.DoesNotExist:
             raise ValidationError("Announcement not found or not yours")
 
+class UnauthenticatedAnnouncementImageViewSet(viewsets.ModelViewSet):
+    queryset = AnnouncementImage.objects.all()
+    serializer_class = AnnouncementImageSerializer
+    permission_classes = [permissions.AllowAny]  # No authentication required
+
+    def get_queryset(self):
+        announcement_id = self.request.query_params.get('announcement_id')
+        if announcement_id:
+            return AnnouncementImage.objects.filter(announcement_id=announcement_id)
+        return AnnouncementImage.objects.none()
+
+    def perform_create(self, serializer):
+        announcement_id = self.request.data.get('announcement_id')
+        if not announcement_id:
+            raise ValidationError("announcement_id is required")
+        try:
+            announcement = Announcement.objects.get(id=announcement_id)
+            serializer.save(announcement=announcement)
+        except Announcement.DoesNotExist:
+            raise ValidationError("Announcement not found")
+
 class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
@@ -535,9 +556,9 @@ class DashboardViewSet(viewsets.ReadOnlyModelViewSet):
         user_id = request.data.get('user_id')
         try:
             user = User.objects.get(id=user_id)
-            if user.is_superuser:
+            if user.role == 'manager':
                 return Response({'detail': 'Cannot change admin role'}, status=status.HTTP_400_BAD_REQUEST)
-            user.is_staff = True
+            user.role = "manager"
             user.save()
             return Response({'detail': f'{user.username} promoted to manager'})
         except User.DoesNotExist:
@@ -553,9 +574,9 @@ class DashboardViewSet(viewsets.ReadOnlyModelViewSet):
         user_id = request.data.get('user_id')
         try:
             user = User.objects.get(id=user_id)
-            if user.is_superuser:
+            if user.role == 'admin':
                 return Response({'detail': 'Cannot change admin role'}, status=status.HTTP_400_BAD_REQUEST)
-            user.is_staff = False
+            user.role = "client"
             user.save()
             return Response({'detail': f'{user.username} demoted to regular user'})
         except User.DoesNotExist:

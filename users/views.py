@@ -1,5 +1,6 @@
 import secrets
 import string
+import uuid
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -90,42 +91,47 @@ class UserViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
     def register_and_announce(self, request):
-        # Generate a random password
         password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
         
-        # Prepare user data
         user_data = {
-            'fullname': request.data.get('fullname'),
+            'username': request.data.get('fullname'),
             'email': request.data.get('email'),
             'phone': request.data.get('phone'),
             'is_legal': request.data.get('is_legal', False),
+            'company_name': request.data.get('company_name'),
             'password': password,
             'role': 'client',
-            'username': request.data.get('email'),  # Use email as username
         }
 
-        # Validate and create user
+        if not user_data['email']:
+            return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not user_data['phone']:
+            return Response({'error': 'Phone is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
         user_serializer = UserSerializer(data=user_data)
         user_serializer.is_valid(raise_exception=True)
         user = user_serializer.save()
 
-        # Prepare announcement data
         announcement_data = request.data.get('announcement', {})
-        announcement_data['client'] = user.id
+        announcement_data['client_id'] = user.id
         announcement_data['status'] = 'pending'
 
-        # Create announcement
         announcement_serializer = AnnouncementSerializer(data=announcement_data)
         announcement_serializer.is_valid(raise_exception=True)
         announcement = announcement_serializer.save()
 
-        # Send email with password and login link
-        login_url = 'http://localhost:3000/login'  # Replace with your frontend login URL
+        # Generate a temporary upload key
+        upload_key = str(uuid.uuid4())
+
+        # Optionally store the upload key in the database or cache with an expiration
+        # For simplicity, we'll just return it for now
+
+        login_url = 'http://localhost:3000/login'
         try:
             send_mail(
                 subject='Your KompXizmat Account Password',
                 message=(
-                    f"Assalomu alaykum, {user.fullname}!\n\n"
+                    f"Assalomu alaykum, {user.username}!\n\n"
                     f"Siz KompXizmat platformasida muvaffaqiyatli ro‘yxatdan o‘tdingiz.\n"
                     f"Sizning email: {user.email}\n"
                     f"Sizning parolingiz: {password}\n\n"
@@ -137,12 +143,12 @@ class UserViewSet(viewsets.ModelViewSet):
                 fail_silently=False,
             )
         except Exception as e:
-            # Log the error but don't fail the registration
             print(f"Failed to send email: {e}")
 
         return Response({
             'user': UserSerializer(user).data,
-            'announcement': AnnouncementSerializer(announcement).data
+            'announcement': AnnouncementSerializer(announcement).data,
+            'upload_key': upload_key,  # Include the upload key
         }, status=status.HTTP_201_CREATED)
 
     @extend_schema(
@@ -223,14 +229,95 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(request.user)
         data = serializer.data
         
-        if request.user.is_superuser:
+        if request.user.role == 'admin':
             data['role'] = 'admin'
-        elif request.user.is_staff:
+        elif request.user.role == 'manager':
             data['role'] = 'manager'
         else:
             data['role'] = 'client'
             
         return Response(data)
+    
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def change_password(self, request):
+        user = request.user
+        current_password = request.data.get('current_password')
+        new_password = request.data.get('new_password')
+
+        if not current_password or not new_password:
+            return Response(
+                {'error': 'Current password and new password are required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not user.check_password(current_password):
+            return Response(
+                {'error': 'Current password is incorrect.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(new_password) < 4:
+            return Response(
+                {'error': 'New password must be at least 4 characters long.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user.password = make_password(new_password)
+        user.save()
+
+        refresh = RefreshToken.for_user(user)
+        response = Response(
+            {
+                'message': 'Password changed successfully',
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            },
+            status=status.HTTP_200_OK
+        )
+        response.set_cookie('refresh', str(refresh), max_age=60*60*24*365)
+        response.set_cookie('access', str(refresh.access_token), max_age=60*60*24*365)
+
+        return response
+
+    @extend_schema(
+        request=OpenApiExample(
+            'Update Profile Request',
+            value={
+                'fullname': 'John Doe Updated',
+                'email': 'updated@example.com',
+                'phone': '+998901234567',
+                'is_legal': False,
+                'company_name': 'Updated Company'
+            },
+            request_only=True,
+        ),
+        responses={
+            200: UserSerializer,
+            400: OpenApiResponse(description='Invalid data'),
+            403: OpenApiResponse(description='Permission denied')
+        },
+        tags=["Users"],
+        description='Update the current user\'s profile information'
+    )
+    @action(detail=False, methods=['put'], permission_classes=[permissions.IsAuthenticated])
+    def update_profile(self, request):
+        user = request.user
+        data = request.data
+
+        # Update only allowed fields
+        update_data = {
+            'username': data.get('username', user.username),
+            'email': data.get('email', user.email),
+            'phone': data.get('phone', user.phone),
+            'is_legal': data.get('is_legal', user.is_legal),
+            'company_name': data.get('company_name', user.company_name) if user.is_legal else user.company_name,
+        }
+
+        serializer = UserSerializer(user, data=update_data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         responses={200: UserSerializer(many=True)},
