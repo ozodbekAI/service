@@ -16,6 +16,18 @@ jobs:
           project_id: kompxizmat
           export_default_credentials: true
 
+      - name: Debug GCloud Authentication
+        run: |
+          echo "Checking GCloud version and authentication status..."
+          gcloud version
+          gcloud auth list
+          echo "GOOGLE_APPLICATION_CREDENTIALS: $GOOGLE_APPLICATION_CREDENTIALS"
+          if [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+            cat $GOOGLE_APPLICATION_CREDENTIALS
+          else
+            echo "Credentials file not found!"
+          fi
+
       - name: Deploy to Google Cloud VM
         env:
           MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
