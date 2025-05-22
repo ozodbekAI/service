@@ -1,4 +1,4 @@
-name: Deploy Django to /root/service
+name: Deploy Django to Google Cloud VM
 on:
   push:
     branches: [ main ]
@@ -8,36 +8,43 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
-      - name: Install sshpass
-        run: sudo apt-get update && sudo apt-get install -y sshpass
-      
-      - name: Deploy to server
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
-          SERVER_USER: ${{ secrets.SERVER_USER }}
-          SERVER_PASS: ${{ secrets.SERVER_PASSWORD }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: kompxizmat
+          export_default_credentials: true
+
+      - name: Deploy to Google Cloud VM
         run: |
-          sshpass -p "$SERVER_PASS" ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST << 'EOF'
+          # Authenticate gcloud (already done by setup-gcloud, but ensuring credentials are set)
+          gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+
+          # Verify VM exists (replace 'my-vm-name' with your VM name)
+          gcloud compute instances describe my-vm-name --zone=${{ secrets.GCP_ZONE }} || echo "VM check failed"
+
+          # SSH into the VM using gcloud compute ssh
+          gcloud compute ssh --zone=${{ secrets.GCP_ZONE }} my-vm-name --project=kompxizmat --strict-host-key-checking=no --command="
             # Install PostgreSQL development packages for psycopg2
             sudo apt-get update
-            sudo apt-get install -y python3-dev libpq-dev postgresql postgresql-contrib
+            sudo apt-get install -y python3-dev libpq-dev postgresql postgresql-contrib git
 
             # Clone or pull the project to /root/service
             if [ -d /root/service/.git ]; then
               cd /root/service
               # Configure git user for stashing
-              git config --global user.email "deploy@example.com"
-              git config --global user.name "Deployment Script"
+              git config --global user.email 'deploy@example.com'
+              git config --global user.name 'Deployment Script'
               
               # Stash any local changes including untracked files
-              git stash save --include-untracked "Deployment stash $(date)"
+              git stash save --include-untracked 'Deployment stash \$(date)'
               
               # Pull the latest changes
               git pull origin main
               
               # Apply stashed changes back (if there were any)
-              git stash list | grep -q "stash" && git stash pop || echo "No stashed changes to apply"
+              git stash list | grep -q 'stash' && git stash pop || echo 'No stashed changes to apply'
             else
               git clone https://github.com/ozodbekAI/service.git /root/service
               cd /root/service
@@ -51,7 +58,7 @@ jobs:
             # Activate virtual environment
             source venv/bin/activate
             
-            # Install required packages with psycopg2-binary instead of psycopg2
+            # Install required packages with psycopg2-binary
             pip install --upgrade pip
             sed -i 's/psycopg2==2.9.10/psycopg2-binary==2.9.10/g' requirements.txt
             pip install -r requirements.txt
@@ -60,10 +67,10 @@ jobs:
             mkdir -p static
 
             # Check if STATIC_ROOT is set in settings.py
-            if ! grep -q "STATIC_ROOT" config/settings.py; then
-              echo "# Setting STATIC_ROOT for collectstatic" >> config/settings.py
-              echo "import os" >> config/settings.py
-              echo "STATIC_ROOT = os.path.join(BASE_DIR, 'static')" >> config/settings.py
+            if ! grep -q 'STATIC_ROOT' config/settings.py; then
+              echo '# Setting STATIC_ROOT for collectstatic' >> config/settings.py
+              echo 'import os' >> config/settings.py
+              echo 'STATIC_ROOT = os.path.join(BASE_DIR, \"static\")' >> config/settings.py
             fi
             
             # Run Django commands
@@ -74,6 +81,6 @@ jobs:
             sudo chown -R www-data:www-data /root/service/static
             
             # Restart services if systemd is configured
-            sudo systemctl restart gunicorn || echo "Gunicorn service not found"
-            sudo systemctl restart nginx || echo "Nginx service not found"
-          EOF
+            sudo systemctl restart gunicorn || echo 'Gunicorn service not found'
+            sudo systemctl restart nginx || echo 'Nginx service not found'
+          "
