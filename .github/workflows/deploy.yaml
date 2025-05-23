@@ -3,12 +3,12 @@ name: Deploy Django to Server
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,49 +21,59 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
           script: |
-            # Navigate to service directory
-            cd /root/service || { echo "Service directory not found, creating..."; mkdir -p /root && cd /root; }
-            
+            # Use home directory instead of /root to avoid permission issues
+            DEPLOY_DIR="$HOME/service"
+
+            # Navigate to deploy directory or create it
+            if [ ! -d "$DEPLOY_DIR" ]; then
+              echo "Service directory not found, creating..."
+              mkdir -p "$DEPLOY_DIR"
+            fi
+            cd "$DEPLOY_DIR"
+
             # Clone or pull repository
-            if [ -d /root/service/.git ]; then
+            if [ -d "$DEPLOY_DIR/.git" ]; then
               echo "Pulling latest changes..."
-              cd /root/service
               git pull origin main
             else
               echo "Cloning repository..."
-              cd /root
-              git clone https://github.com/ozodbekAI/service.git
-              cd service
+              git clone https://github.com/ozodbekAI/service.git "$DEPLOY_DIR"
+              cd "$DEPLOY_DIR"
             fi
-            
-            # Install system dependencies
-            sudo apt-get update
-            sudo apt-get install -y python3-pip python3-venv python3-dev libpq-dev
-            
+
+            # Update package lists
+            if command -v apt-get > /dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y python3-pip python3-venv python3-dev libpq-dev git
+            elif command -v yum > /dev/null 2>&1; then
+              sudo yum update -y
+              sudo yum install -y python3-pip python3-venv python3-devel postgresql-devel git
+            else
+              echo "Neither apt-get nor yum found. Install dependencies manually."
+              exit 1
+            fi
+
             # Create and activate virtual environment
             if [ ! -d venv ]; then
               python3 -m venv venv
             fi
+            # shellcheck disable=SC1091
             source venv/bin/activate
-            
-            # Install Python dependencies
+
+            # Upgrade pip and install dependencies
             pip install --upgrade pip
             pip install -r requirements.txt
-            
-            # Run Django migrations
+
+            # Run migrations and collect static files
             python manage.py migrate
-            
-            # Collect static files
             python manage.py collectstatic --noinput
-            
-            # Install gunicorn if not installed
+
+            # Install gunicorn and restart if running
             pip install gunicorn
-            
-            # Kill existing gunicorn processes
             pkill -f gunicorn || echo "No existing gunicorn processes"
-            
-            # Start gunicorn in background
-            nohup gunicorn --bind 0.0.0.0:8000 config.wsgi:application > /dev/null 2>&1 &
-            
+
+            # Start gunicorn in background, redirect logs to a file for debugging
+            nohup gunicorn --bind 0.0.0.0:8000 config.wsgi:application > gunicorn.log 2>&1 &
+
             echo "Deployment completed successfully!"
             echo "Application is running on port 8000"
