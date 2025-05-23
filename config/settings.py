@@ -244,4 +244,4 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'mrrlionnn@gmail.com'  # O'zgartirish kerak
 EMAIL_HOST_PASSWORD = 'mnpv dlcy xjmt ldwt'  # O'zgartirish kerak
-DEFAULT_FROM_EMAIL = 'Computer Service <mrrlionnn@gmail.com>'
+DEFAULT_FROM_EMAIL = 'KompXizmat <mrrlionnn@gmail.com>'
