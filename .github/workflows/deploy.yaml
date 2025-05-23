@@ -46,7 +46,6 @@ jobs:
             python manage.py collectstatic --noinput
 
             echo "Restarting Gunicorn..."
-            pkill -f gunicorn || echo "No running gunicorn processes"
-            nohup gunicorn --bind 0.0.0.0:8000 config.wsgi:application > gunicorn.log 2>&1 &
+            sudo systemctl restart gunicorn
 
             echo "Deployment completed successfully!"
