@@ -8,7 +8,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiResponse
 from users.models import User
-from users.serializers import UserSerializer
+from users.serializers import ProfileImageSerializer, UserSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from application.models import Announcement
 from application.serializers import AnnouncementSerializer
@@ -318,6 +318,13 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(users, many=True)
         return Response(serializer.data)
 
+
+class ProfileImageViewSet(viewsets.GenericViewSet):
+    queryset = User.objects.all()
+    serializer_class = ProfileImageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
     @extend_schema(
         request={
             'multipart/form-data': {
@@ -336,19 +343,10 @@ class UserViewSet(viewsets.ModelViewSet):
         description='Upload a profile image for the authenticated user',
         tags=["Users"]
     )
-    @action(detail=False, methods=['POST'], permission_classes=[permissions.IsAuthenticated], parser_classes=[MultiPartParser, FormParser])
-    def upload_profile_image(self, request):
+    @action(detail=False, methods=['post'], url_path='')
+    def upload(self, request):
         user = request.user
-        profile_image = request.FILES.get('profile_image')
-
-        if not profile_image:
-            return Response({'error': 'Profile image is required.'}, status=status.HTTP_400_BAD_REQUEST)
-        allowed_types = ['image/jpeg', 'image/png', 'image/gif']
-        if profile_image.content_type not in allowed_types:
-            return Response({'error': 'Invalid image format. Only JPEG, PNG, and GIF are allowed.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        user.profile_image = profile_image
-        user.save()
-
-        serializer = UserSerializer(user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        serializer = self.get_serializer(user, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(UserSerializer(user).data, status=status.HTTP_200_OK)

@@ -6,13 +6,13 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-from users.views import UserViewSet
+from users.views import ProfileImageViewSet, UserViewSet
 
 router = DefaultRouter(trailing_slash=False)
 router.register(r'', UserViewSet)
+router.register(r'upload_profile_image', ProfileImageViewSet, basename='profile-image')
 
 
 urlpatterns = [
-    path('upload_profile_image/', UserViewSet.as_view({'post': 'upload_profile_image'}), name='user-upload-profile-image'),
     path('', include(router.urls)),
 ]

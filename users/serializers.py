@@ -27,3 +27,23 @@ class UserSerializer(serializers.ModelSerializer):
             instance.password = make_password(validated_data['password'])
         instance.save()
         return instance
+    
+
+class ProfileImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['profile_image']
+        extra_kwargs = {
+            'profile_image': {'required': True}
+        }
+
+    def validate_profile_image(self, value):
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif']
+        if value.content_type not in allowed_types:
+            raise serializers.ValidationError("Invalid image format. Only JPEG, PNG, and GIF are allowed.")
+        return value
+
+    def update(self, instance, validated_data):
+        instance.profile_image = validated_data.get('profile_image', instance.profile_image)
+        instance.save()
+        return instance
