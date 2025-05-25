@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import (
 
 from users.views import UserViewSet
 
-router = DefaultRouter()
+router = DefaultRouter(trailing_slash=False)
 router.register(r'', UserViewSet)
 
 
