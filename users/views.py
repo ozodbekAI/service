@@ -324,6 +324,7 @@ class ProfileImageViewSet(viewsets.GenericViewSet):
     serializer_class = ProfileImageSerializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
+    
 
     @extend_schema(
         request={
@@ -343,7 +344,7 @@ class ProfileImageViewSet(viewsets.GenericViewSet):
         description='Upload a profile image for the authenticated user',
         tags=["Users"]
     )
-    @action(detail=False, methods=['post'], url_path='')
+    @action(detail=False, methods=['post'], url_path='upload')
     def upload(self, request):
         user = request.user
         serializer = self.get_serializer(user, data=request.data)
