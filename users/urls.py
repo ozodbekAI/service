@@ -14,5 +14,6 @@ router.register(r'', UserViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('upload_profile_image/', UserViewSet.as_view({'post': 'upload_profile_image'}), name='user-upload-profile-image'),
 
 ]
