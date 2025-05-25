@@ -336,7 +336,7 @@ class UserViewSet(viewsets.ModelViewSet):
         description='Upload a profile image for the authenticated user',
         tags=["Users"]
     )
-    @action(detail=False, methods=['POST', 'PUT'], permission_classes=[permissions.IsAuthenticated], parser_classes=[MultiPartParser, FormParser])
+    @action(detail=False, methods=['POST'], permission_classes=[permissions.IsAuthenticated], parser_classes=[MultiPartParser, FormParser])
     def upload_profile_image(self, request):
         user = request.user
         profile_image = request.FILES.get('profile_image')
