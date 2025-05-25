@@ -11,6 +11,7 @@ class User(AbstractUser):
     company_name = models.CharField(max_length=255, blank=True, null=True)
     is_legal = models.BooleanField(default=False)
     password = models.CharField(max_length=100)
+    profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
     role = models.CharField(max_length=10, default='client')
 
     groups = models.ManyToManyField(

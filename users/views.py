@@ -1,10 +1,8 @@
-import secrets
-import string
-import uuid
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, parser_classes
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from django.conf import settings
@@ -14,6 +12,9 @@ from users.serializers import UserSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from application.models import Announcement
 from application.serializers import AnnouncementSerializer
+import secrets
+import string
+import uuid
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -123,9 +124,6 @@ class UserViewSet(viewsets.ModelViewSet):
         # Generate a temporary upload key
         upload_key = str(uuid.uuid4())
 
-        # Optionally store the upload key in the database or cache with an expiration
-        # For simplicity, we'll just return it for now
-
         login_url = 'http://localhost:3000/login'
         try:
             send_mail(
@@ -148,7 +146,7 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response({
             'user': UserSerializer(user).data,
             'announcement': AnnouncementSerializer(announcement).data,
-            'upload_key': upload_key,  # Include the upload key
+            'upload_key': upload_key,
         }, status=status.HTTP_201_CREATED)
 
     @extend_schema(
@@ -170,7 +168,8 @@ class UserViewSet(viewsets.ModelViewSet):
                             'username': 'username',
                             'email': 'user@example.com',
                             'phone': '+998901234567',
-                            'role': 'client'
+                            'role': 'client',
+                            'profile_image': 'http://localhost:8000/media/profile_images/user.jpg'
                         },
                         'refresh': 'refresh_token',
                         'access': 'access_token',
@@ -205,13 +204,7 @@ class UserViewSet(viewsets.ModelViewSet):
         response.set_cookie('access', str(refresh.access_token), max_age=60*60*24*365)
 
         response.data = {
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "phone": user.phone,
-                "role": user.role
-            },
+            "user": UserSerializer(user).data,
             "refresh": str(refresh),
             "access": str(refresh.access_token),
             "status": "Success" 
@@ -227,16 +220,7 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def me(self, request):
         serializer = self.get_serializer(request.user)
-        data = serializer.data
-        
-        if request.user.role == 'admin':
-            data['role'] = 'admin'
-        elif request.user.role == 'manager':
-            data['role'] = 'manager'
-        else:
-            data['role'] = 'client'
-            
-        return Response(data)
+        return Response(serializer.data)
     
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def change_password(self, request):
@@ -287,7 +271,8 @@ class UserViewSet(viewsets.ModelViewSet):
                 'email': 'updated@example.com',
                 'phone': '+998901234567',
                 'is_legal': False,
-                'company_name': 'Updated Company'
+                'company_name': 'Updated Company',
+                'profile_image': 'binary_image_data'
             },
             request_only=True,
         ),
@@ -297,7 +282,7 @@ class UserViewSet(viewsets.ModelViewSet):
             403: OpenApiResponse(description='Permission denied')
         },
         tags=["Users"],
-        description='Update the current user\'s profile information'
+        description='Update the current user\'s profile information, including profile image'
     )
     @action(detail=False, methods=['put'], permission_classes=[permissions.IsAuthenticated])
     def update_profile(self, request):
@@ -311,6 +296,7 @@ class UserViewSet(viewsets.ModelViewSet):
             'phone': data.get('phone', user.phone),
             'is_legal': data.get('is_legal', user.is_legal),
             'company_name': data.get('company_name', user.company_name) if user.is_legal else user.company_name,
+            'profile_image': data.get('profile_image', user.profile_image),
         }
 
         serializer = UserSerializer(user, data=update_data, partial=True)
@@ -331,3 +317,38 @@ class UserViewSet(viewsets.ModelViewSet):
         users = User.objects.all()
         serializer = self.get_serializer(users, many=True)
         return Response(serializer.data)
+
+    @extend_schema(
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'profile_image': {'type': 'string', 'format': 'binary'}
+                },
+                'required': ['profile_image']
+            }
+        },
+        responses={
+            200: UserSerializer,
+            400: OpenApiResponse(description='Invalid image file'),
+            403: OpenApiResponse(description='Permission denied')
+        },
+        description='Upload a profile image for the authenticated user',
+        tags=["Users"]
+    )
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated], parser_classes=[MultiPartParser, FormParser])
+    def upload_profile_image(self, request):
+        user = request.user
+        profile_image = request.FILES.get('profile_image')
+
+        if not profile_image:
+            return Response({'error': 'Profile image is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif']
+        if profile_image.content_type not in allowed_types:
+            return Response({'error': 'Invalid image format. Only JPEG, PNG, and GIF are allowed.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.profile_image = profile_image
+        user.save()
+
+        serializer = UserSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
