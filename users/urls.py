@@ -9,7 +9,7 @@ from rest_framework_simplejwt.views import (
 from users.views import ProfileImageViewSet, UserViewSet
 
 router = DefaultRouter()
-router.register(r'', UserViewSet)
+router.register(r'', UserViewSet, basename='user')
 router.register(r'upload_profile_image', ProfileImageViewSet, basename='profile-image')
 
 
