@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import (
 
 from users.views import ProfileImageViewSet, UserViewSet
 
-router = DefaultRouter(trailing_slash=False)
+router = DefaultRouter()
 router.register(r'', UserViewSet)
 router.register(r'upload_profile_image', ProfileImageViewSet, basename='profile-image')
 
