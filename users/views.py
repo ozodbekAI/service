@@ -211,7 +211,61 @@ class UserViewSet(viewsets.ModelViewSet):
         }
 
         return response 
-    
+
+    @extend_schema(
+        request=OpenApiExample(
+            'Forgot Password Request',
+            value={
+                'email': 'user@example.com'
+            },
+            request_only=True,
+        ),
+        responses={
+            200: OpenApiResponse(description='Password reset email sent successfully'),
+            400: OpenApiResponse(description='Invalid email'),
+            404: OpenApiResponse(description='User not found')
+        },
+        description='Generate a new password and send it to the user\'s email',
+        tags=["Users"]
+    )
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def forgot_password(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'error': 'User with this email does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Generate a new random password
+        new_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+        user.password = make_password(new_password)
+        user.save()
+
+        # Send the new password via email
+        login_url = 'http://localhost:3000/login'
+        try:
+            send_mail(
+                subject='KompXizmat: Your New Password',
+                message=(
+                    f"Assalomu alaykum, {user.username}!\n\n"
+                    f"Sizning parolingiz muvaffaqiyatli tiklandi.\n"
+                    f"Yangi parolingiz: {new_password}\n\n"
+                    f"Tizimga kirish uchun quyidagi havoladan foydalaning:\n{login_url}\n\n"
+                    f"Iltimos, parolingizni xavfsiz saqlang va xavfsizlik uchun uni o‘zgartiring."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            print(f"Failed to send email: {e}")
+            return Response({'error': 'Failed to send email. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({'message': 'New password sent to your email.'}, status=status.HTTP_200_OK)
+
     @extend_schema(
         responses={200: UserSerializer},
         tags=["Users"],
