@@ -228,7 +228,7 @@ class UserViewSet(viewsets.ModelViewSet):
         description='Generate a new password and send it to the user\'s email',
         tags=["Users"]
     )
-    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny], url_path='forgot_password')
     def forgot_password(self, request):
         email = request.data.get('email')
         if not email:
