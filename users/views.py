@@ -245,7 +245,7 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save()
 
         # Send the new password via email
-        login_url = 'http://localhost:3000/login'
+        login_url = 'https://kompxizmat.netlify.app/login'
         try:
             send_mail(
                 subject='KompXizmat: Your New Password',
